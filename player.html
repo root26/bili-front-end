@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OBS 歌单展示端</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --font-size: 22px;
+            --max-width: 440px;
+            --max-height: 1000px;
+            --border-width: 10px;
+            --bg-color: rgba(15,5,20,0.95);
+            --border-color: #b388ff;
+            --title-color: #ffb6c1;
+            --text-color: #f0e6ff;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            background-color: transparent;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            color: #fff;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .scroll-viewport { 
+            width: 100%; 
+            max-width: var(--max-width); 
+            height: 100%;
+            max-height: var(--max-height);
+            overflow: hidden;
+            position: relative;
+            background: linear-gradient(to right, transparent, rgba(0,0,0,0.4)); 
+        }
+
+        .scroll-wrapper { display: flex; flex-direction: column; will-change: transform;}
+        .content-block { width: 100%; padding: 15px 20px; display: flex; flex-direction: column; gap: 20px; }
+        
+        .playlist-card {
+            background-color: var(--bg-color); 
+            border: var(--border-width) solid var(--border-color); 
+            border-radius: 12px; padding: 20px 25px; box-shadow: 0 0 15px var(--border-color);
+        }
+        .title {
+            font-size: calc(var(--font-size) * 1.2); font-weight: bold; text-align: center; color: var(--title-color); 
+            text-shadow: 2px 2px 4px #000, 0 0 10px var(--title-color); 
+            margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px dashed var(--border-color); 
+        }
+        .song-list {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; 
+            font-size: var(--font-size); color: var(--text-color); 
+            text-shadow: 1px 1px 2px rgba(0,0,0,1), 0 0 6px var(--border-color); 
+        }
+        .song-item { 
+            word-break: break-all; 
+            white-space: normal; 
+            padding-right: 10px; 
+            display: flex; 
+            align-items: flex-start; 
+            line-height: 1.4;
+        }
+        .song-item::before {
+            content: ''; display: inline-block; width: 6px; height: 6px;
+            background-color: var(--border-color); border-radius: 50%;
+            margin-right: 10px; box-shadow: 0 0 5px var(--border-color);
+            flex-shrink: 0; margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="scroll-viewport" id="scroll-viewport">
+        <div class="scroll-wrapper" id="scroll-wrapper">
+            <div class="content-block" id="content-block-1"></div>
+            <div class="content-block" id="content-block-2"></div>
+        </div>
+    </div>
+
+    <script>
+        // ⚠️⚠️⚠️ 请将这里的 URL 替换为你部署在 Render 上的后端域名 ⚠️⚠️⚠️
+        const API_BASE_URL = "https://bili-gedian.onrender.com"; 
+
+        let config = null;
+        let lastConfigStr = "";
+        
+        let scrollY = 0;
+        let paused = false;
+        let pauseUntil = 0;
+        let contentHeight = 0;
+        let viewportHeight = 0;
+        let pausePoints = [];
+        let isAnimating = false;
+
+        async function fetchConfig() {
+            try {
+                // 请求 Render 后端
+                const res = await fetch(`${API_BASE_URL}/api/config`);
+                const newConfig = await res.json();
+                if (!newConfig || !newConfig.songs) return;
+
+                const configStr = JSON.stringify(newConfig);
+                if (configStr === lastConfigStr) return;
+                lastConfigStr = configStr;
+                
+                config = newConfig;
+                applyConfig();
+            } catch (e) {
+                console.error("获取配置失败，正在重试...", e);
+            }
+        }
+
+        function applyConfig() {
+            const contentBlock1 = document.getElementById('content-block-1');
+            const contentBlock2 = document.getElementById('content-block-2');
+            const scrollWrapper = document.getElementById('scroll-wrapper');
+            const scrollViewport = document.getElementById('scroll-viewport');
+
+            const themes = {
+                'dark-pink':    { bg: 'rgba(10,5,12,0.95)', border: '#ff1493', title: '#ffd700', text: '#ffffff' },
+                'cyber-blue':   { bg: 'rgba(5,10,20,0.95)', border: '#00ffff', title: '#00ffff', text: '#ffffff' },
+                'cute-purple':  { bg: 'rgba(15,5,20,0.95)', border: '#b388ff', title: '#ffb6c1', text: '#f0e6ff' },
+                'cyber-green':  { bg: 'rgba(5,20,10,0.95)', border: '#00ff88', title: '#adff2f', text: '#e0ffe0' },
+                'sunset-orange':{ bg: 'rgba(25,12,5,0.95)', border: '#ff8c00', title: '#ffd700', text: '#fff5e6' },
+                'mono-white':   { bg: 'rgba(30,30,30,0.95)', border: '#ffffff', title: '#ffffff', text: '#e0e0e0' }
+            };
+            let t = themes[config.theme] || themes['cute-purple'];
+            
+            document.documentElement.style.setProperty('--bg-color', t.bg);
+            document.documentElement.style.setProperty('--border-color', t.border);
+            document.documentElement.style.setProperty('--title-color', t.title);
+            document.documentElement.style.setProperty('--text-color', t.text);
+            
+            document.documentElement.style.setProperty('--font-size', config.fontSize + 'px');
+            document.documentElement.style.setProperty('--max-width', config.width + 'px');
+            document.documentElement.style.setProperty('--max-height', (config.height || 1000) + 'px');
+            document.documentElement.style.setProperty('--border-width', config.borderWidth + 'px');
+
+            const groups = config.songs.split('\n');
+            let html = '';
+            groups.forEach(line => {
+                if (!line.trim()) return;
+                const parts = line.split('-');
+                if (parts.length >= 2) {
+                    const title = parts[0].trim();
+                    const songs = parts[1].split(',');
+                    
+                    if (!config.scroll && config.staticCategory && config.staticCategory !== 'all' && config.staticCategory !== title) {
+                        return; 
+                    }
+
+                    html += `
+                        <div class="playlist-card" data-title="${title}">
+                            <div class="title">${title}</div>
+                            <div class="song-list">
+                                ${songs.map(song => `<div class="song-item">${song.trim()}</div>`).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+
+            contentBlock1.innerHTML = html;
+            contentBlock2.innerHTML = html;
+
+            setTimeout(() => {
+                scrollY = 0;
+                scrollWrapper.style.transform = `translateY(0px)`;
+                
+                contentHeight = contentBlock1.offsetHeight;
+                viewportHeight = scrollViewport.offsetHeight;
+                pausePoints = [];
+
+                if (config.scroll && contentHeight > viewportHeight) {
+                    contentBlock2.style.display = 'block';
+                    
+                    const cards = contentBlock1.querySelectorAll('.playlist-card');
+                    cards.forEach(card => {
+                        pausePoints.push(card.offsetTop);
+                    });
+                    
+                    if (!isAnimating) {
+                        isAnimating = true;
+                        requestAnimationFrame(scrollLoop);
+                    }
+                } else {
+                    contentBlock2.style.display = 'none';
+                    isAnimating = false;
+                }
+            }, 100);
+        }
+
+        let lastTime = 0;
+        function scrollLoop(time) {
+            if (!config || !config.scroll || !isAnimating) return;
+
+            if (!lastTime) lastTime = time;
+            let deltaTime = time - lastTime;
+            lastTime = time;
+
+            let pixelsPerSecond = viewportHeight / (config.speed / 10);
+            let speed = (pixelsPerSecond / 1000) * deltaTime;
+
+            if (paused) {
+                if (time > pauseUntil) {
+                    paused = false;
+                }
+            } else {
+                scrollY += speed;
+
+                if (scrollY >= contentHeight) {
+                    scrollY = 0;
+                } else {
+                    for (let point of pausePoints) {
+                        if (scrollY >= point - speed && scrollY <= point + speed && point > 0) {
+                            paused = true;
+                            pauseUntil = time + 2000;
+                            pausePoints = pausePoints.filter(p => p !== point);
+                            setTimeout(() => { pausePoints.push(point); }, 2000);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            document.getElementById('scroll-wrapper').style.transform = `translateY(-${scrollY}px)`;
+            requestAnimationFrame(scrollLoop);
+        }
+
+        // 页面加载立即执行，然后每3秒轮询
+        fetchConfig();
+        setInterval(fetchConfig, 3000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>歌单插件配置器</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --font-size: 22px;
+            --max-width: 440px;
+            --max-height: 1000px;
+            --border-width: 10px;
+            /* 默认紫色主题 */
+            --bg-color: rgba(15,5,20,0.95);
+            --border-color: #b388ff;
+            --title-color: #ffb6c1;
+            --text-color: #f0e6ff;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            background-color: #1a1a1a;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            color: #fff;
+        }
+
+        .config-panel {
+            width: 420px;
+            background-color: #2a2a2a;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #444;
+            z-index: 10;
+            height: 100%;
+        }
+        
+        .panel-header { padding: 12px 20px 8px; border-bottom: 1px solid #444; flex-shrink: 0; }
+        .panel-header h2 { font-size: 18px; color: #ff1493; margin-bottom: 5px; }
+        .panel-header .tip { font-size: 12px; color: #aaa; }
+
+        .categories-list { flex: 1; overflow-y: auto; padding: 10px 20px; display: flex; flex-direction: column; gap: 10px; }
+        .categories-list::-webkit-scrollbar { width: 6px; }
+        .categories-list::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+
+        .category-card { background: #1e1e1e; border: 1px solid #444; border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+        .category-header-row { display: flex; justify-content: space-between; align-items: center; }
+
+        .input-title {
+            background: #111; color: #ffb6c1; border: 1px solid #333;
+            border-radius: 4px; padding: 4px 8px; font-size: 14px; font-weight: bold; width: 70%; outline: none;
+        }
+        .input-title:focus { border-color: #ff1493; }
+
+        .btn-delete { background: transparent; color: #ff4444; border: 1px solid #ff4444; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .btn-delete:hover { background: #ff4444; color: #fff; }
+
+        .input-songs {
+            width: 100%; height: 80px; background: #111; color: #eee;
+            border: 1px solid #333; border-radius: 4px; padding: 6px 8px;
+            resize: vertical; font-size: 13px; line-height: 1.5; font-family: inherit; outline: none;
+        }
+        .input-songs:focus { border-color: #ff1493; }
+
+        .panel-footer { padding: 10px 20px; border-top: 1px solid #444; background: #2a2a2a; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+
+        .btn-add { background: transparent; color: #ff1493; border: 1px dashed #ff1493; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; }
+        .btn-add:hover { background: rgba(255, 20, 147, 0.1); }
+
+        .control-row { display: flex; align-items: center; justify-content: space-between; background: #1e1e1e; padding: 6px 10px; border-radius: 4px; border: 1px solid #333; font-size: 13px; gap: 10px; flex-wrap: wrap;}
+        .color-picker-group { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        
+        .color-btn { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+        .color-btn.active { border-color: #fff; box-shadow: 0 0 8px rgba(255,255,255,0.8); transform: scale(1.1); }
+
+        .slider-group { display: flex; align-items: center; gap: 5px; flex: 1; min-width: 120px;}
+        .slider-group label { font-size: 12px; color: #aaa; white-space: nowrap; }
+        .slider-group span { font-size: 12px; color: #fff; width: 40px; text-align: right; }
+        input[type="range"] { flex: 1; cursor: pointer; width: 50px;}
+        input[type="number"] { width: 45px; background:#111; color:#fff; border:1px solid #444; border-radius:4px; padding:2px; text-align:center; }
+        
+        select { background: #111; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 4px; outline: none; flex: 1; }
+
+        .btn-generate { background: #ff1493; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 16px; width: 100%; margin-top: 4px; }
+        .btn-generate:hover { background: #ff69b4; }
+
+        .preview-area {
+            flex: 1; background: repeating-linear-gradient(45deg, #333, #333 10px, #444 10px, #444 20px);
+            position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center;
+        }
+
+        .scroll-viewport { width: 100%; height: 100%; overflow: hidden; position: relative; }
+        .scroll-wrapper { display: flex; flex-direction: column; }
+        .scroll-wrapper:hover { animation-play-state: paused; }
+        .content-block { width: 100%; padding: 15px 20px; display: flex; flex-direction: column; gap: 20px; }
+        
+        @keyframes autoScroll {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-50%); } 
+        }
+        
+        .playlist-card {
+            background-color: var(--bg-color); 
+            border: var(--border-width) solid var(--border-color); 
+            border-radius: 12px; padding: 20px 25px; box-shadow: 0 0 15px var(--border-color);
+        }
+        .title {
+            font-size: calc(var(--font-size) * 1.2); font-weight: bold; text-align: center; color: var(--title-color); 
+            text-shadow: 2px 2px 4px #000, 0 0 10px var(--title-color); 
+            margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px dashed var(--border-color); 
+        }
+        .song-list {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; 
+            font-size: var(--font-size); color: var(--text-color); 
+            text-shadow: 1px 1px 2px rgba(0,0,0,1), 0 0 6px var(--border-color); 
+        }
+        .song-item { 
+            word-break: break-all; 
+            white-space: normal; 
+            padding-right: 10px; 
+            display: flex; 
+            align-items: flex-start; 
+            line-height: 1.4;
+        }
+        .song-item::before {
+            content: ''; display: inline-block; width: 6px; height: 6px;
+            background-color: var(--border-color); border-radius: 50%;
+            margin-right: 10px; box-shadow: 0 0 5px var(--border-color);
+            flex-shrink: 0; margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="config-panel">
+        <div class="panel-header">
+            <h2>歌单插件配置器</h2>
+            <div class="tip">支持长歌名自动换行。</div>
+        </div>
+        
+        <div class="categories-list" id="categories-list"></div>
+
+        <div class="panel-footer">
+            <button class="btn-add" id="btn-add-category">+ 添加新分类</button>
+            
+            <div class="control-row">
+                <div class="color-picker-group">
+                    <span>配色：</span>
+                    <div class="color-btn" data-theme="dark-pink" style="background: #ff1493;"></div>
+                    <div class="color-btn" data-theme="cyber-blue" style="background: #00ffff;"></div>
+                    <div class="color-btn active" data-theme="cute-purple" style="background: #b388ff;"></div>
+                    <div class="color-btn" data-theme="cyber-green" style="background: #00ff88;"></div>
+                    <div class="color-btn" data-theme="sunset-orange" style="background: #ff8c00;"></div>
+                    <div class="color-btn" data-theme="mono-white" style="background: #ffffff;"></div>
+                </div>
+                
+                <div class="slider-group" style="justify-content: flex-end; flex: 0.8;">
+                    <label style="cursor:pointer;">
+                        <input type="checkbox" id="input-scroll" checked> 滚动
+                    </label>
+                    <input type="number" id="input-speed" min="10" max="300" value="70"> 秒
+                </div>
+            </div>
+
+            <div class="control-row">
+                <label style="font-size:12px; color:#aaa; white-space:nowrap;">静止展示:</label>
+                <select id="input-static-category">
+                    <option value="all">展示全部分类</option>
+                </select>
+            </div>
+
+            <div class="control-row">
+                <div class="slider-group">
+                    <label>字号:</label>
+                    <input type="range" id="input-font-size" min="12" max="40" value="22">
+                    <span id="font-size-val">22px</span>
+                </div>
+                <div class="slider-group">
+                    <label>宽:</label>
+                    <input type="range" id="input-width" min="300" max="1000" step="10" value="440">
+                    <span id="width-val">440</span>
+                </div>
+            </div>
+            
+            <div class="control-row">
+                <div class="slider-group">
+                    <label>高:</label>
+                    <input type="range" id="input-height" min="200" max="1000" step="10" value="1000">
+                    <span id="height-val">1000</span>
+                </div>
+                <div class="slider-group">
+                    <label>边:</label>
+                    <input type="range" id="input-border" min="0" max="20" value="10">
+                    <span id="border-val">10px</span>
+                </div>
+            </div>
+
+            <button class="btn-generate" id="btn-save">保存配置到服务器</button>
+        </div>
+    </div>
+
+    <div class="preview-area">
+        <div class="scroll-viewport" id="scroll-viewport">
+            <div class="scroll-wrapper" id="scroll-wrapper">
+                <div class="content-block" id="content-block-1"></div>
+                <div class="content-block" id="content-block-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ⚠️⚠️⚠️ 请将这里的 URL 替换为你部署在 Render 上的后端域名 ⚠️⚠️⚠️
+        const API_BASE_URL = "https://bili-gedian.onrender.com"; 
+
+        let config = {
+            songs: "",
+            theme: "cute-purple",
+            scroll: true,
+            speed: 70,
+            fontSize: 22,
+            width: 440,
+            height: 1000,
+            borderWidth: 10,
+            staticCategory: "all"
+        };
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // 请求 Render 后端
+                const res = await fetch(`${API_BASE_URL}/api/config`);
+                const data = await res.json();
+                if (data) {
+                    config = Object.assign(config, data);
+                    if (!config.songs) loadDefaultTemplates();
+                    else renderUIFromConfig();
+                } else {
+                    loadDefaultTemplates();
+                }
+            } catch (e) {
+                console.error("拉取配置失败，使用默认", e);
+                loadDefaultTemplates();
+            }
+            initColorBtns();
+            updatePreview();
+        });
+
+        function loadDefaultTemplates() {
+            const defaultSongs = "Rap / 卡点-壳,她,123,APT,COCO\n流行歌单 (一)-笼,你,骗,蓝,白羊,唯一\n儿歌歌单-勇气大爆发,快乐女孩";
+            config.songs = defaultSongs;
+            parseSongsToUI(defaultSongs);
+        }
+
+        function parseSongsToUI(songsStr) {
+            const list = document.getElementById('categories-list');
+            list.innerHTML = '';
+            songsStr.split('\n').forEach(line => {
+                if (!line.trim()) return;
+                const parts = line.split('-');
+                if (parts.length >= 2) {
+                    createCategoryCard(parts[0], parts[1].replace(/,/g, '\n'));
+                }
+            });
+            updateStaticCategorySelect();
+        }
+
+        function renderUIFromConfig() {
+            document.getElementById('input-scroll').checked = config.scroll;
+            document.getElementById('input-speed').value = config.speed;
+            document.getElementById('input-font-size').value = config.fontSize;
+            document.getElementById('input-width').value = config.width;
+            document.getElementById('input-height').value = config.height || 1000;
+            document.getElementById('input-border').value = config.borderWidth;
+            
+            document.querySelectorAll('.color-btn').forEach(btn => {
+                if (btn.getAttribute('data-theme') === config.theme) btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+
+            parseSongsToUI(config.songs);
+            updateStaticCategorySelect();
+            document.getElementById('input-static-category').value = config.staticCategory || 'all';
+            updateSliderLabels();
+        }
+        
+        function updateStaticCategorySelect() {
+            const select = document.getElementById('input-static-category');
+            const cards = document.querySelectorAll('.category-card');
+            const currentVal = select.value;
+            
+            select.innerHTML = '<option value="all">展示全部分类</option>';
+            cards.forEach(card => {
+                const title = card.querySelector('.input-title').value.trim();
+                if (title) {
+                    const opt = document.createElement('option');
+                    opt.value = title;
+                    opt.innerText = title;
+                    select.appendChild(opt);
+                }
+            });
+            
+            if (Array.from(select.options).some(o => o.value === currentVal)) {
+                select.value = currentVal;
+            }
+        }
+
+        function createCategoryCard(title = "新分类", songs = "") {
+            const card = document.createElement('div');
+            card.className = 'category-card';
+            card.innerHTML = `
+                <div class="category-header-row">
+                    <input type="text" class="input-title" value="${title}" placeholder="分类名称">
+                    <button class="btn-delete">删除</button>
+                </div>
+                <textarea class="input-songs" placeholder="在此粘贴歌名，每行一首...">${songs}</textarea>
+            `;
+            
+            card.querySelector('.input-title').addEventListener('input', () => {
+                updatePreview();
+                updateStaticCategorySelect();
+            });
+            card.querySelector('.input-songs').addEventListener('input', updatePreview);
+            card.querySelector('.btn-delete').addEventListener('click', () => {
+                card.remove();
+                updatePreview();
+                updateStaticCategorySelect();
+            });
+
+            document.getElementById('categories-list').appendChild(card);
+        }
+
+        document.getElementById('btn-add-category').addEventListener('click', () => {
+            createCategoryCard();
+            updateStaticCategorySelect();
+        });
+
+        function initColorBtns() {
+            document.querySelectorAll('.color-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    updatePreview();
+                });
+            });
+        }
+
+        function collectDataFromUI() {
+            const cards = document.querySelectorAll('.category-card');
+            const lines = [];
+            cards.forEach(card => {
+                const title = card.querySelector('.input-title').value.trim() || "未命名分类";
+                const songsText = card.querySelector('.input-songs').value;
+                const songLines = songsText.split('\n').map(s => s.trim()).filter(s => s !== "");
+                if (songLines.length > 0) {
+                    lines.push(`${title}-${songLines.join(',')}`);
+                }
+            });
+            
+            config.songs = lines.join('\n');
+            config.scroll = document.getElementById('input-scroll').checked;
+            config.speed = parseInt(document.getElementById('input-speed').value);
+            config.fontSize = parseInt(document.getElementById('input-font-size').value);
+            config.width = parseInt(document.getElementById('input-width').value);
+            config.height = parseInt(document.getElementById('input-height').value);
+            config.borderWidth = parseInt(document.getElementById('input-border').value);
+            config.staticCategory = document.getElementById('input-static-category').value;
+            
+            const activeBtn = document.querySelector('.color-btn.active');
+            if (activeBtn) config.theme = activeBtn.getAttribute('data-theme');
+        }
+
+        function updateSliderLabels() {
+            document.getElementById('font-size-val').innerText = document.getElementById('input-font-size').value + 'px';
+            document.getElementById('width-val').innerText = document.getElementById('input-width').value;
+            document.getElementById('height-val').innerText = document.getElementById('input-height').value;
+            document.getElementById('border-val').innerText = document.getElementById('input-border').value + 'px';
+        }
+
+        function updatePreview() {
+            collectDataFromUI();
+            updateSliderLabels();
+            applyTheme(config.theme);
+            applySizes();
+            renderPlaylist();
+        }
+
+        document.querySelectorAll('input, select').forEach(el => {
+            el.addEventListener('input', updatePreview);
+            el.addEventListener('change', updatePreview);
+        });
+
+        function applyTheme(themeName) {
+            const themes = {
+                'dark-pink':    { bg: 'rgba(10,5,12,0.95)', border: '#ff1493', title: '#ffd700', text: '#ffffff' },
+                'cyber-blue':   { bg: 'rgba(5,10,20,0.95)', border: '#00ffff', title: '#00ffff', text: '#ffffff' },
+                'cute-purple':  { bg: 'rgba(15,5,20,0.95)', border: '#b388ff', title: '#ffb6c1', text: '#f0e6ff' },
+                'cyber-green':  { bg: 'rgba(5,20,10,0.95)', border: '#00ff88', title: '#adff2f', text: '#e0ffe0' },
+                'sunset-orange':{ bg: 'rgba(25,12,5,0.95)', border: '#ff8c00', title: '#ffd700', text: '#fff5e6' },
+                'mono-white':   { bg: 'rgba(30,30,30,0.95)', border: '#ffffff', title: '#ffffff', text: '#e0e0e0' }
+            };
+            let t = themes[themeName] || themes['dark-pink'];
+            document.documentElement.style.setProperty('--bg-color', t.bg);
+            document.documentElement.style.setProperty('--border-color', t.border);
+            document.documentElement.style.setProperty('--title-color', t.title);
+            document.documentElement.style.setProperty('--text-color', t.text);
+        }
+
+        function applySizes() {
+            document.documentElement.style.setProperty('--font-size', config.fontSize + 'px');
+            document.documentElement.style.setProperty('--max-width', config.width + 'px');
+            document.documentElement.style.setProperty('--max-height', config.height + 'px');
+            document.documentElement.style.setProperty('--border-width', config.borderWidth + 'px');
+        }
+
+        function renderPlaylist() {
+            const c1 = document.getElementById('content-block-1');
+            const c2 = document.getElementById('content-block-2');
+            const wrapper = document.getElementById('scroll-wrapper');
+            const viewport = document.getElementById('scroll-viewport');
+
+            if (!config.songs) {
+                c1.innerHTML = "";
+                c2.innerHTML = "";
+                return;
+            }
+
+            const groups = config.songs.split('\n');
+            let html = '';
+            groups.forEach(line => {
+                if (!line.trim()) return;
+                const parts = line.split('-');
+                if (parts.length >= 2) {
+                    const title = parts[0].trim();
+                    const songs = parts[1].split(',');
+                    
+                    if (!config.scroll && config.staticCategory !== 'all' && config.staticCategory !== title) {
+                        return; 
+                    }
+
+                    html += `
+                        <div class="playlist-card" data-title="${title}">
+                            <div class="title">${title}</div>
+                            <div class="song-list">
+                                ${songs.map(song => `<div class="song-item">${song.trim()}</div>`).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+
+            c1.innerHTML = html;
+            c2.innerHTML = html;
+
+            setTimeout(() => {
+                if (config.scroll && c1.offsetHeight > viewport.offsetHeight + 20) {
+                    wrapper.style.animation = `autoScroll ${config.speed}s linear infinite`;
+                    c2.style.display = 'block';
+                } else {
+                    wrapper.style.animation = 'none';
+                    c2.style.display = 'none';
+                }
+            }, 50);
+        }
+
+        document.getElementById('btn-save').addEventListener('click', async () => {
+            collectDataFromUI();
+            try {
+                // 请求 Render 后端
+                const res = await fetch(`${API_BASE_URL}/api/config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const result = await res.json();
+                if (result.success) {
+                    alert("✅ 保存成功！\n\n请打开 player.html 查看同步效果。");
+                }
+            } catch (e) {
+                alert("❌ 保存失败，请确保 Render 后端已唤醒并启动！\n错误信息: " + e.message);
+            }
+        });
+    </script>
+</body>
+</html>

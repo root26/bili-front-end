@@ -5,72 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OBS 歌单展示端</title>
     <style>
+        /* 样式与之前保持一致，省略以节省篇幅 */
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        :root {
-            --font-size: 22px;
-            --max-width: 440px;
-            --max-height: 1000px;
-            --border-width: 10px;
-            --bg-color: rgba(15,5,20,0.95);
-            --border-color: #b388ff;
-            --title-color: #ffb6c1;
-            --text-color: #f0e6ff;
-        }
-
-        body {
-            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
-            background-color: transparent;
-            width: 100vw;
-            height: 100vh;
-            overflow: hidden;
-            color: #fff;
-            display: flex;
-            justify-content: flex-end;
-        }
-
-        .scroll-viewport { 
-            width: 100%; 
-            max-width: var(--max-width); 
-            height: 100%;
-            max-height: var(--max-height);
-            overflow: hidden;
-            position: relative;
-            background: linear-gradient(to right, transparent, rgba(0,0,0,0.4)); 
-        }
-
+        :root { --font-size: 22px; --max-width: 440px; --max-height: 1000px; --border-width: 10px; --bg-color: rgba(15,5,20,0.95); --border-color: #b388ff; --title-color: #ffb6c1; --text-color: #f0e6ff; }
+        body { font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif; background-color: transparent; width: 100vw; height: 100vh; overflow: hidden; color: #fff; display: flex; justify-content: flex-end; }
+        .scroll-viewport { width: 100%; max-width: var(--max-width); height: 100%; max-height: var(--max-height); overflow: hidden; position: relative; background: linear-gradient(to right, transparent, rgba(0,0,0,0.4)); }
         .scroll-wrapper { display: flex; flex-direction: column; will-change: transform;}
         .content-block { width: 100%; padding: 15px 20px; display: flex; flex-direction: column; gap: 20px; }
-        
-        .playlist-card {
-            background-color: var(--bg-color); 
-            border: var(--border-width) solid var(--border-color); 
-            border-radius: 12px; padding: 20px 25px; box-shadow: 0 0 15px var(--border-color);
-        }
-        .title {
-            font-size: calc(var(--font-size) * 1.2); font-weight: bold; text-align: center; color: var(--title-color); 
-            text-shadow: 2px 2px 4px #000, 0 0 10px var(--title-color); 
-            margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px dashed var(--border-color); 
-        }
-        .song-list {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; 
-            font-size: var(--font-size); color: var(--text-color); 
-            text-shadow: 1px 1px 2px rgba(0,0,0,1), 0 0 6px var(--border-color); 
-        }
-        .song-item { 
-            word-break: break-all; 
-            white-space: normal; 
-            padding-right: 10px; 
-            display: flex; 
-            align-items: flex-start; 
-            line-height: 1.4;
-        }
-        .song-item::before {
-            content: ''; display: inline-block; width: 6px; height: 6px;
-            background-color: var(--border-color); border-radius: 50%;
-            margin-right: 10px; box-shadow: 0 0 5px var(--border-color);
-            flex-shrink: 0; margin-top: 8px;
-        }
+        .playlist-card { background-color: var(--bg-color); border: var(--border-width) solid var(--border-color); border-radius: 12px; padding: 20px 25px; box-shadow: 0 0 15px var(--border-color); }
+        .title { font-size: calc(var(--font-size) * 1.2); font-weight: bold; text-align: center; color: var(--title-color); text-shadow: 2px 2px 4px #000, 0 0 10px var(--title-color); margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px dashed var(--border-color); }
+        .song-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; font-size: var(--font-size); color: var(--text-color); text-shadow: 1px 1px 2px rgba(0,0,0,1), 0 0 6px var(--border-color); }
+        .song-item { word-break: break-all; white-space: normal; padding-right: 10px; display: flex; align-items: flex-start; line-height: 1.4; }
+        .song-item::before { content: ''; display: inline-block; width: 6px; height: 6px; background-color: var(--border-color); border-radius: 50%; margin-right: 10px; box-shadow: 0 0 5px var(--border-color); flex-shrink: 0; margin-top: 8px; }
     </style>
 </head>
 <body>
@@ -82,10 +28,7 @@
     </div>
 
     <script>
-        // ⚠️ 你的 Render 后端域名
         const API_BASE_URL = "https://bili-gedian.onrender.com"; 
-
-        // 从 URL 获取主播 Mid
         const urlParams = new URLSearchParams(window.location.search);
         const MID = urlParams.get('Mid') || 'test_user_001';
 
@@ -102,9 +45,24 @@
 
         async function fetchConfig() {
             try {
-                const res = await fetch(`${API_BASE_URL}/api/config?mid=${MID}`);
+                // 增加超时控制，防止冷启动卡死
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                
+                const res = await fetch(`${API_BASE_URL}/api/config?mid=${MID}`, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                
                 const newConfig = await res.json();
-                if (!newConfig || !newConfig.songs) return;
+                if (!newConfig || newConfig.songs === undefined) return;
+
+                // 如果获取到的歌单是空的，显示友好提示
+                if (newConfig.songs === "") {
+                    document.getElementById('content-block-1').innerHTML = `<div style="color:#fff; padding: 20px; font-size: 18px; font-weight: bold; text-align: center;">
+                        ⚠️ 暂未配置歌单<br><br>
+                        <span style="font-size:14px; color:#aaa;">请打开配置页保存歌单</span>
+                    </div>`;
+                    return;
+                }
 
                 const configStr = JSON.stringify(newConfig);
                 if (configStr === lastConfigStr) return;
@@ -113,7 +71,7 @@
                 config = newConfig;
                 applyConfig();
             } catch (e) {
-                console.error("获取配置失败，正在重试...", e);
+                console.log("获取失败(可能是冷启动休眠)，等待重试...");
             }
         }
 
@@ -155,15 +113,7 @@
                     if (!config.scroll && config.staticCategory && config.staticCategory !== 'all' && config.staticCategory !== title) {
                         return; 
                     }
-
-                    html += `
-                        <div class="playlist-card" data-title="${title}">
-                            <div class="title">${title}</div>
-                            <div class="song-list">
-                                ${songs.map(song => `<div class="song-item">${song.trim()}</div>`).join('')}
-                            </div>
-                        </div>
-                    `;
+                    html += `<div class="playlist-card" data-title="${title}"><div class="title">${title}</div><div class="song-list">${songs.map(song => `<div class="song-item">${song.trim()}</div>`).join('')}</div></div>`;
                 }
             });
 
@@ -201,17 +151,17 @@
         function scrollLoop(time) {
             if (!config || !config.scroll || !isAnimating) return;
 
+            // 【优化】处理切换标签页后回来导致的 deltaTime 过大问题
             if (!lastTime) lastTime = time;
             let deltaTime = time - lastTime;
+            if (deltaTime > 100) deltaTime = 16; // 如果卡顿了很久（比如切屏），重置增量防止跳跃
             lastTime = time;
 
             let pixelsPerSecond = viewportHeight / (config.speed / 10);
             let speed = (pixelsPerSecond / 1000) * deltaTime;
 
             if (paused) {
-                if (time > pauseUntil) {
-                    paused = false;
-                }
+                if (time > pauseUntil) paused = false;
             } else {
                 scrollY += speed;
 
@@ -234,6 +184,7 @@
             requestAnimationFrame(scrollLoop);
         }
 
+        // 启动轮询
         fetchConfig();
         setInterval(fetchConfig, 3000);
     </script>

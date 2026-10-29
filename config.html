@@ -12,7 +12,6 @@
             --max-width: 440px;
             --max-height: 1000px;
             --border-width: 10px;
-            /* 默认紫色主题 */
             --bg-color: rgba(15,5,20,0.95);
             --border-color: #b388ff;
             --title-color: #ffb6c1;
@@ -167,9 +166,7 @@
 
             <div class="control-row">
                 <label style="font-size:12px; color:#aaa; white-space:nowrap;">静止展示:</label>
-                <select id="input-static-category">
-                    <option value="all">展示全部分类</option>
-                </select>
+                <select id="input-static-category"><option value="all">展示全部分类</option></select>
             </div>
 
             <div class="control-row">
@@ -212,8 +209,12 @@
     </div>
 
     <script>
-        // ⚠️⚠️⚠️ 请将这里的 URL 替换为你部署在 Render 上的后端域名 ⚠️⚠️⚠️
+        // ⚠️ 你的 Render 后端域名
         const API_BASE_URL = "https://bili-gedian.onrender.com"; 
+
+        // 从 URL 获取主播 Mid
+        const urlParams = new URLSearchParams(window.location.search);
+        const MID = urlParams.get('Mid') || 'test_user_001';
 
         let config = {
             songs: "",
@@ -229,10 +230,9 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
             try {
-                // 请求 Render 后端
-                const res = await fetch(`${API_BASE_URL}/api/config`);
+                const res = await fetch(`${API_BASE_URL}/api/config?mid=${MID}`);
                 const data = await res.json();
-                if (data) {
+                if (data && data.songs !== undefined) {
                     config = Object.assign(config, data);
                     if (!config.songs) loadDefaultTemplates();
                     else renderUIFromConfig();
@@ -400,7 +400,7 @@
                 'sunset-orange':{ bg: 'rgba(25,12,5,0.95)', border: '#ff8c00', title: '#ffd700', text: '#fff5e6' },
                 'mono-white':   { bg: 'rgba(30,30,30,0.95)', border: '#ffffff', title: '#ffffff', text: '#e0e0e0' }
             };
-            let t = themes[themeName] || themes['dark-pink'];
+            let t = themes[themeName] || themes['cute-purple'];
             document.documentElement.style.setProperty('--bg-color', t.bg);
             document.documentElement.style.setProperty('--border-color', t.border);
             document.documentElement.style.setProperty('--title-color', t.title);
@@ -467,18 +467,17 @@
         document.getElementById('btn-save').addEventListener('click', async () => {
             collectDataFromUI();
             try {
-                // 请求 Render 后端
                 const res = await fetch(`${API_BASE_URL}/api/config`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(config)
+                    body: JSON.stringify({ mid: MID, config: config })
                 });
                 const result = await res.json();
                 if (result.success) {
-                    alert("✅ 保存成功！\n\n请打开 player.html 查看同步效果。");
+                    alert("✅ 保存成功！\n\n当前保存的 Mid 为: " + MID);
                 }
             } catch (e) {
-                alert("❌ 保存失败，请确保 Render 后端已唤醒并启动！\n错误信息: " + e.message);
+                alert("❌ 保存失败，请确保 Render 后端已唤醒！\n错误信息: " + e.message);
             }
         });
     </script>

@@ -82,8 +82,12 @@
     </div>
 
     <script>
-        // ⚠️⚠️⚠️ 请将这里的 URL 替换为你部署在 Render 上的后端域名 ⚠️⚠️⚠️
+        // ⚠️ 你的 Render 后端域名
         const API_BASE_URL = "https://bili-gedian.onrender.com"; 
+
+        // 从 URL 获取主播 Mid
+        const urlParams = new URLSearchParams(window.location.search);
+        const MID = urlParams.get('Mid') || 'test_user_001';
 
         let config = null;
         let lastConfigStr = "";
@@ -98,8 +102,7 @@
 
         async function fetchConfig() {
             try {
-                // 请求 Render 后端
-                const res = await fetch(`${API_BASE_URL}/api/config`);
+                const res = await fetch(`${API_BASE_URL}/api/config?mid=${MID}`);
                 const newConfig = await res.json();
                 if (!newConfig || !newConfig.songs) return;
 
@@ -231,7 +234,6 @@
             requestAnimationFrame(scrollLoop);
         }
 
-        // 页面加载立即执行，然后每3秒轮询
         fetchConfig();
         setInterval(fetchConfig, 3000);
     </script>
